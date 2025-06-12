@@ -21,7 +21,10 @@ pip install -r requirements.txt
 
 You will also need to download [nuScenes](https://www.nuscenes.org/) and its dependencies.
 
-
+Also, run 
+```
+python nets/ops/setup.py build install
+```
 ## Pre-trained models
 
 To download a pre-trained camera-only model, run this:
