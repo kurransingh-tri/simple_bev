@@ -65,6 +65,10 @@ class MCAPDataset(Dataset):
         image = image.unsqueeze(0).repeat(S, 1, 1, 1)  # [S, C, H, W]
 
         pix_T_cam = torch.from_numpy(self.intrinsics).float()
+        pix_T_cam_4x4 = self.intrinsics_to_4x4(self.intrinsics)
+        pix_T_cam = torch.from_numpy(pix_T_cam_4x4).float()
+
+
         cam0_T_cam = torch.from_numpy(self.extrinsics).float()
         return {
             'rgb_camXs': image,  # [S, C, H, W]
@@ -72,6 +76,11 @@ class MCAPDataset(Dataset):
             'cam0_T_camXs': cam0_T_cam.unsqueeze(0).repeat(S, 1, 1),  # [S, 4, 4]
             'timestamp': frame['log_time']
         }
+        
+    def intrinsics_to_4x4(self, intrinsics_3x3):
+        intrinsics_4x4 = np.eye(4)
+        intrinsics_4x4[:3, :3] = intrinsics_3x3
+        return intrinsics_4x4
 
 def run_inference():
     # Configuration
