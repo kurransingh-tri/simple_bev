@@ -228,7 +228,7 @@ def run_inference():
             cv2.imwrite(f'outputs/bev_seg_{batch_idx}.png', seg_np.astype(np.uint8))
 
             # Save a collage of all camera images in 2 rows (as balanced as possible)
-            imgs = rgb_camXs.cpu().numpy()  # [S, C, H, W]
+            imgs = rgb_camXs[0].cpu().numpy()  # [S, C, H, W]
             imgs = np.transpose(imgs, (0, 2, 3, 1)) * 255  # [S, H, W, C]
             imgs = imgs.astype(np.uint8)
             S = imgs.shape[0]
