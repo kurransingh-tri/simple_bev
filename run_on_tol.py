@@ -76,8 +76,7 @@ class MCAPDataset(Dataset):
                             'data': proto_msg.data
                         })
         self.calibrations = calibrations
-        # Align frames by timestamp (assume same number and order for all cameras)
-        # If not, you may need to implement timestamp matching logic
+        # Align frames by timestep 
         min_len = min(len(frames_dict[cid]) for cid in self.camera_ids)
         frames = []
         for i in range(min_len):
@@ -203,16 +202,16 @@ def run_inference():
         print("Starting inference...")
         print(f"Total frames to process: {len(dataset)}")
         for batch_idx, batch in enumerate(dataloader):
-            # [B, S, ...] -> [S, ...] since batch_size=1
-            rgb_camXs = batch['rgb_camXs'][0].to(device)  # [S, C, H, W]
-            pix_T_cams = batch['pix_T_cams'][0].to(device)  # [S, 4, 4]
-            cam0_T_camXs = batch['cam0_T_camXs'][0].to(device)  # [S, 4, 4]
+            # Keep batch dimension since model expects [B, S, C, H, W]
+            rgb_camXs = batch['rgb_camXs'].to(device)  # [B, S, C, H, W]
+            pix_T_cams = batch['pix_T_cams'].to(device)  # [B, S, 4, 4]
+            cam0_T_camXs = batch['cam0_T_camXs'].to(device)  # [B, S, 4, 4]
 
-            # Forward pass
+            # Forward pass with batch dimension intact
             raw_e, feat_e, seg_e, center_e, offset_e = model(
-                rgb_camXs.unsqueeze(0),  # [1, S, C, H, W]
-                pix_T_cams.unsqueeze(0),  # [1, S, 4, 4]
-                cam0_T_camXs.unsqueeze(0),  # [1, S, 4, 4]
+                rgb_camXs,
+                pix_T_cams,
+                cam0_T_camXs,
                 vox_util
             )
             print(f"seg_e shape: {seg_e.shape}")
