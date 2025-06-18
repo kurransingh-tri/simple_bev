@@ -49,11 +49,11 @@ def export_segnet_to_onnx(checkpoint_path, onnx_path):
         input_names=['rgb_camXs', 'pix_T_cams', 'cam0_T_camXs'],
         output_names=['raw_feat', 'feat', 'segmentation', 'instance_center', 'instance_offset'],
         opset_version=16,
-        # dynamic_axes={
-        #     'rgb_camXs': {0: 'batch_size'},
-        #     'pix_T_cams': {0: 'batch_size'},
-        #     'cam0_T_camXs': {0: 'batch_size'}
-        # }
+        dynamic_axes={
+            'rgb_camXs': {0: 'batch_size'},
+            'pix_T_cams': {0: 'batch_size'},
+            'cam0_T_camXs': {0: 'batch_size'}
+        }
     )
 
 if __name__ == "__main__":
