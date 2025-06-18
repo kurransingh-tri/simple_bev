@@ -30,10 +30,10 @@ class UpsamplingConcat(nn.Module):
 
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(out_channels),
+            nn.GroupNorm(1,out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(out_channels),
+            nn.GroupNorm(1,out_channels),
             nn.ReLU(inplace=True),
         )
 
@@ -48,7 +48,7 @@ class UpsamplingAdd(nn.Module):
         self.upsample_layer = nn.Sequential(
             nn.Upsample(scale_factor=scale_factor, mode='bilinear', align_corners=False),
             nn.Conv2d(in_channels, out_channels, kernel_size=1, padding=0, bias=False),
-            nn.InstanceNorm2d(out_channels),
+            nn.GroupNorm(1,out_channels),
         )
 
     def forward(self, x, x_skip):
@@ -75,25 +75,25 @@ class Decoder(nn.Module):
 
         self.feat_head = nn.Sequential(
             nn.Conv2d(shared_out_channels, shared_out_channels, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(shared_out_channels),
+            nn.GroupNorm(1,shared_out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(shared_out_channels, shared_out_channels, kernel_size=1, padding=0),
         )
         self.segmentation_head = nn.Sequential(
             nn.Conv2d(shared_out_channels, shared_out_channels, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(shared_out_channels),
+            nn.GroupNorm(1,shared_out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(shared_out_channels, n_classes, kernel_size=1, padding=0),
         )
         self.instance_offset_head = nn.Sequential(
             nn.Conv2d(shared_out_channels, shared_out_channels, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(shared_out_channels),
+            nn.GroupNorm(1,shared_out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(shared_out_channels, 2, kernel_size=1, padding=0),
         )
         self.instance_center_head = nn.Sequential(
             nn.Conv2d(shared_out_channels, shared_out_channels, kernel_size=3, padding=1, bias=False),
-            nn.InstanceNorm2d(shared_out_channels),
+            nn.GroupNorm(1,shared_out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(shared_out_channels, 1, kernel_size=1, padding=0),
             nn.Sigmoid(),
@@ -102,7 +102,7 @@ class Decoder(nn.Module):
         if self.predict_future_flow:
             self.instance_future_head = nn.Sequential(
                 nn.Conv2d(shared_out_channels, shared_out_channels, kernel_size=3, padding=1, bias=False),
-                nn.InstanceNorm2d(shared_out_channels),
+                nn.GroupNorm(1,shared_out_channels),
                 nn.ReLU(inplace=True),
                 nn.Conv2d(shared_out_channels, 2, kernel_size=1, padding=0),
             )
@@ -305,6 +305,20 @@ class Segnet(nn.Module):
         self.rand_flip = rand_flip
         self.latent_dim = latent_dim
         self.encoder_type = encoder_type
+        scene_centroid_py = np.array([0.0, 1.0, 0.0]).reshape([1, 3])
+        scene_centroid = torch.from_numpy(scene_centroid_py).float()
+        XMIN, XMAX = -50, 50
+        ZMIN, ZMAX = -50, 50
+        YMIN, YMAX = -5, 5
+        bounds = (XMIN, XMAX, YMIN, YMAX, ZMIN, ZMAX)
+        vox_util = utils.vox.Vox_util(
+            Z=200,
+            Y=8,
+            X=200,
+            scene_centroid=scene_centroid,
+            bounds=bounds,
+        )
+        self.vox_util = vox_util
 
         self.mean = torch.as_tensor([0.485, 0.456, 0.406]).reshape(1,3,1,1).float().cuda()
         self.std = torch.as_tensor([0.229, 0.224, 0.225]).reshape(1,3,1,1).float().cuda()
@@ -326,26 +340,26 @@ class Segnet(nn.Module):
             if self.use_metaradar:
                 self.bev_compressor = nn.Sequential(
                     nn.Conv2d(feat2d_dim*Y + 16*Y, feat2d_dim, kernel_size=3, padding=1, stride=1, bias=False),
-                    nn.InstanceNorm2d(latent_dim),
+                    nn.GroupNorm(1,feat2d_dim),
                     nn.GELU(),
                 )
             else:
                 self.bev_compressor = nn.Sequential(
                     nn.Conv2d(feat2d_dim*Y+1, feat2d_dim, kernel_size=3, padding=1, stride=1, bias=False),
-                    nn.InstanceNorm2d(latent_dim),
+                    nn.GroupNorm(1,feat2d_dim),
                     nn.GELU(),
                 )
         elif self.use_lidar:
             self.bev_compressor = nn.Sequential(
                 nn.Conv2d(feat2d_dim*Y+Y, feat2d_dim, kernel_size=3, padding=1, stride=1, bias=False),
-                nn.InstanceNorm2d(latent_dim),
+                nn.GroupNorm(1,feat2d_dim),
                 nn.GELU(),
             )
         else:
             if self.do_rgbcompress:
                 self.bev_compressor = nn.Sequential(
                     nn.Conv2d(feat2d_dim*Y, feat2d_dim, kernel_size=3, padding=1, stride=1, bias=False),
-                    nn.InstanceNorm2d(latent_dim),
+                    nn.GroupNorm(1,feat2d_dim),
                     nn.GELU(),
                 )
             else:
@@ -372,19 +386,20 @@ class Segnet(nn.Module):
         else:
             self.xyz_camA = None
         
-    def forward(self, rgb_camXs, pix_T_cams, cam0_T_camXs, vox_util, rad_occ_mem0=None):
+    def forward(self, rgb_camXs, pix_T_cams, cam0_T_camXs, rad_occ_mem0=None):
         '''
         B = batch size, S = number of cameras, C = 3, H = img height, W = img width
         rgb_camXs: (B,S,C,H,W)
         pix_T_cams: (B,S,4,4)
         cam0_T_camXs: (B,S,4,4)
-        vox_util: vox util object
         rad_occ_mem0:
             - None when use_radar = False, use_lidar = False
             - (B, 1, Z, Y, X) when use_radar = True, use_metaradar = False
             - (B, 16, Z, Y, X) when use_radar = True, use_metaradar = True
             - (B, 1, Z, Y, X) when use_lidar = True
         '''
+        vox_util = self.vox_util
+        
         B, S, C, H, W = rgb_camXs.shape
         assert(C==3)
         # reshape tensors
