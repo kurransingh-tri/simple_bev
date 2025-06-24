@@ -69,13 +69,13 @@ def animate_trajectory(messages, window_seconds=2, hz=200):
         init_func=init, blit=True, interval=1
     )
     
-    # Save animation as MP4 
-    ani.save("trajectory_animation.mp4", writer="ffmpeg", fps=500)
+    # # Save animation as MP4 
+    # ani.save("trajectory_animation.mp4", writer="ffmpeg", fps=500)
     plt.show()
 
 if __name__ == "__main__":
     messages = []
-    for i in range(10):
+    for i in range(1):
         input_file = f"/home/ubuntu/lyftbags/tmpoc_tol/tmpoc_tol{i}.mcap"
         gnss_topic = "/novatel/gnsspos"
 
